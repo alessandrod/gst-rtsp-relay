@@ -112,6 +112,7 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
   factory->pay_pads = 0;
   factory->rtspsrc_no_more_pads = FALSE;
   factory->rtspsrc_no_more_pads_cond = g_cond_new ();
+  factory->unblocked_pads = 0;
   factory->dynamic_payloaders = NULL;
 }
 
@@ -188,16 +189,30 @@ ghost_probe_cb (GstPad *pad, GstBuffer *buffer, gpointer data)
 }
 
 static void
-rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer factory)
+rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer data)
 {
+  GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (data);
+
   GST_INFO_OBJECT (factory, "blocked pad %s %"GST_PTR_FORMAT,
       GST_PAD_NAME (pad), GST_PAD_CAPS (pad)); 
+
+  g_mutex_lock (factory->lock);
+  factory->unblocked_pads -= 1;
+  g_cond_signal (factory->rtspsrc_no_more_pads_cond);
+  g_mutex_unlock (factory->lock);
 }
 
 static void
 rtspsrc_pad_added_cb_block (GstElement *rtspsrc, GstPad *pad,
     GstRTSPRelayMediaFactory *factory)
 {
+  GST_DEBUG_OBJECT (factory, "found new pad %s:%s, blocking",
+      GST_DEBUG_PAD_NAME (pad));
+
+  g_mutex_lock (factory->lock);
+  factory->unblocked_pads += 1;
+  g_mutex_unlock (factory->lock);
+
   gst_pad_set_blocked_async (pad, TRUE, rtspsrc_pad_blocked_cb_block, factory);
 }
 
@@ -251,7 +266,7 @@ do_dynamic_link (GstRTSPRelayMediaFactory *factory, GstPad *pad)
   }
 
   if (!found)
-    GST_ERROR_OBJECT (factory, "couldn't find dynamic payloader");
+    GST_WARNING_OBJECT (factory, "couldn't find dynamic payloader");
   
   gst_pad_set_blocked_async (pad, FALSE,
       rtspsrc_pad_blocked_cb_link_dynamic, factory);
@@ -455,8 +470,14 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 
   /* wait for no-more-pads from rtspsrc */
   g_mutex_lock (factory->lock);
-  g_cond_timed_wait (factory->rtspsrc_no_more_pads_cond,
-      factory->lock, &cond_timeout);
+  while (TRUE) {
+    if (factory->unblocked_pads == 0 && factory->rtspsrc_no_more_pads)
+      break;
+
+    g_cond_timed_wait (factory->rtspsrc_no_more_pads_cond,
+        factory->lock, &cond_timeout);
+  }
+
   if (factory->rtspsrc_no_more_pads == FALSE) {
     GST_ERROR_OBJECT (factory, "timeout waiting for no more pads for %s",
         factory->location);
@@ -511,6 +532,13 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
     num_streams = do_find_dynamic_streams (factory, bin, rtspsrc);
   else
     g_assert_not_reached ();
+
+  if (num_streams == 0) {
+    GST_WARNING_OBJECT (factory, "no streams found");
+
+    gst_object_unref (bin);
+    return NULL;
+  }
 
   GST_INFO_OBJECT (factory, "created bin %s for %s, %d streams",
       gst_object_get_name (GST_OBJECT (bin)), factory->location, num_streams);

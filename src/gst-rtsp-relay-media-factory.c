@@ -178,16 +178,6 @@ GstRTSPRelayMediaFactory * gst_rtsp_relay_media_factory_new (const char *url)
   return factory;
 }
 
-static gboolean
-ghost_probe_cb (GstPad *pad, GstBuffer *buffer, gpointer data)
-{
-  GST_LOG_OBJECT (data, "probe %s:%s\n",
-      GST_OBJECT_NAME (GST_OBJECT_PARENT (pad)),
-      GST_PAD_NAME (pad));
-
-  return TRUE;
-}
-
 static void
 rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer data)
 {
@@ -319,7 +309,6 @@ create_payloader_from_pad (GstRTSPRelayMediaFactory *factory,
   gst_element_set_name (payloader, (const char *) &buf);
 
   srcpad = gst_element_get_static_pad (payloader, "src");
-  gst_pad_add_buffer_probe (pad, G_CALLBACK (ghost_probe_cb), factory);
   gst_object_unref (srcpad);
 
   return payloader;

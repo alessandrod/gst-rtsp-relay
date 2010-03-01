@@ -48,7 +48,6 @@ struct _GstRTSPRelayMediaFactory {
   gboolean rtspsrc_no_more_pads;
   GCond *rtspsrc_no_more_pads_cond;
   GList *dynamic_payloaders;
-  GMutex *dynamic_link_lock;
   gint unblocked_pads;
 };
 

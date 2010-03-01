@@ -107,7 +107,6 @@ static void
 gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
 {
   factory->lock = g_mutex_new ();
-  factory->dynamic_link_lock = g_mutex_new ();
   factory->location = NULL;
   factory->pay_pads = 0;
   factory->rtspsrc_no_more_pads = FALSE;
@@ -123,7 +122,6 @@ gst_rtsp_relay_media_factory_finalize (GObject * obj)
 
   g_free (factory->location);
   g_mutex_free (factory->lock);
-  g_mutex_free (factory->dynamic_link_lock);
   g_cond_free (factory->rtspsrc_no_more_pads_cond);
   g_list_foreach (factory->dynamic_payloaders, (GFunc) dynamic_payloader_free, NULL);
   g_list_free (factory->dynamic_payloaders);
@@ -273,9 +271,9 @@ rtspsrc_pad_blocked_cb_link_dynamic (GstPad *pad, gboolean blocked, gpointer use
     return;
   }
 
-  g_mutex_lock (factory->dynamic_link_lock);
+  g_mutex_lock (factory->lock);
   do_dynamic_link (factory, pad);
-  g_mutex_unlock (factory->dynamic_link_lock);
+  g_mutex_unlock (factory->lock);
 }
 
 static void

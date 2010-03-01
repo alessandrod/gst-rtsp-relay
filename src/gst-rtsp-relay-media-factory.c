@@ -418,8 +418,8 @@ restart:
     DynamicPayloader *dynamic_payloader = (DynamicPayloader *) walk->data;
 
     capss = gst_caps_to_string (dynamic_payloader->caps);
-    GST_INFO_OBJECT (factory, "created new payloader %s for %s caps %s",
-        GST_OBJECT_NAME (dynamic_payloader->payloader), factory->location, capss);
+    GST_INFO_OBJECT (factory, "created new payloader %s caps %s",
+        GST_OBJECT_NAME (dynamic_payloader->payloader), capss);
     g_free (capss);
 
     payloader = dynamic_payloader->payloader;
@@ -435,7 +435,7 @@ rtspsrc_no_more_pads_cb (GstElement *element, gpointer data)
 {
   GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (data);
 
-  GST_DEBUG_OBJECT (factory, "got no more pads for %s", factory->location);
+  GST_DEBUG_OBJECT (factory, "got no more pads");
   g_mutex_lock (factory->lock);
   factory->rtspsrc_no_more_pads = TRUE;
   g_cond_signal (factory->rtspsrc_no_more_pads_cond);
@@ -479,8 +479,7 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   }
 
   if (factory->rtspsrc_no_more_pads == FALSE) {
-    GST_ERROR_OBJECT (factory, "timeout waiting for no more pads for %s",
-        factory->location);
+    GST_ERROR_OBJECT (factory, "timeout waiting for no more pads");
     g_mutex_unlock (factory->lock);
 
     goto out;
@@ -540,8 +539,8 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
     return NULL;
   }
 
-  GST_INFO_OBJECT (factory, "created bin %s for %s, %d streams",
-      gst_object_get_name (GST_OBJECT (bin)), factory->location, num_streams);
+  GST_INFO_OBJECT (factory, "created bin %s, %d streams",
+      gst_object_get_name (GST_OBJECT (bin)), num_streams);
 
   return GST_ELEMENT (bin);
 }

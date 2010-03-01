@@ -32,15 +32,26 @@ main(int argc, char **argv)
   GstRTSPServer *server;
   GstRTSPMediaMapping *mapping;
   GstRTSPRelayMediaFactory *factory;
+  gchar *name;
 
   gst_init (&argc, &argv);
+
+  if (argc != 2) {
+    g_printerr ("Usage: %s RTSP_SERVER\n", argv[0]);
+
+    return 1;
+  }
 
   loop = g_main_loop_new (NULL, FALSE);
 
   server = gst_rtsp_server_new ();
   gst_rtsp_server_set_port (server, 8555);
 
-  factory = gst_rtsp_relay_media_factory_new ("rtsp://127.0.0.1:8554/test");
+  name = g_strdup_printf ("rtsp-relay-factory-%s", argv[1]);
+  factory = gst_rtsp_relay_media_factory_new (argv[1]);
+  gst_object_set_name (GST_OBJECT (factory), name);
+  g_free (name);
+
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
   mapping = gst_rtsp_server_get_media_mapping (server);
   gst_rtsp_media_mapping_add_factory (mapping, "/test",

@@ -50,6 +50,7 @@ struct _GstRTSPRelayMediaFactory {
   GCond *dynamic_pads_cond;
   GList *dynamic_payloaders;
   gint pads_waiting_block;
+  gboolean error;
 };
 
 struct _GstRTSPRelayMediaFactoryClass {

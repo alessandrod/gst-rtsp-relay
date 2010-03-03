@@ -120,6 +120,7 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
   factory->pads_waiting_block = 0;
   factory->dynamic_payloaders = NULL;
   factory->timeout = DEFAULT_TIMEOUT;
+  factory->error = FALSE;
 }
 
 static void
@@ -442,11 +443,29 @@ rtspsrc_no_more_pads_cb (GstElement *element, gpointer data)
   g_mutex_unlock (factory->lock);
 }
 
+static void
+bus_message_error_cb (GstBus *bus, GstMessage *message, gpointer user_data)
+{
+  GError *error = NULL;
+  gchar *debug = NULL;
+  GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (user_data);
+
+  gst_message_parse_error (message, &error, &debug);
+  GST_ERROR_OBJECT (factory, "got error %s: %s", error->message, debug);
+  g_error_free (error);
+
+  g_mutex_lock (factory->lock);
+  factory->error = TRUE;
+  g_cond_signal (factory->dynamic_pads_cond);
+  g_mutex_unlock (factory->lock);
+}
+
 static guint
 do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
     GstElement *rtspsrc)
 {
   GstPipeline *pipeline;
+  GstBus *bus;
   GTimeVal cond_timeout;
   gint num_streams = 0;
 
@@ -463,6 +482,12 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 
   /* set rtspsrc to PLAYING to find the streams */
   pipeline = GST_PIPELINE (gst_pipeline_new (NULL));
+  bus = gst_pipeline_get_bus (pipeline);
+  gst_bus_set_sync_handler (bus, gst_bus_sync_signal_handler, factory);
+  g_object_connect (bus, "signal::sync-message::error",
+      G_CALLBACK (bus_message_error_cb), factory, NULL);
+  gst_object_unref (bus);
+
   gst_object_ref (bin);
   gst_object_sink (bin);
   gst_bin_add (GST_BIN (pipeline), GST_ELEMENT (bin));
@@ -476,6 +501,11 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
       GST_TIME_ARGS (factory->timeout));
   g_mutex_lock (factory->lock);
   while (TRUE) {
+    if (factory->error) {
+      g_mutex_unlock (factory->lock);
+
+      goto out;
+    }
     if (factory->pads_waiting_block == 0 && factory->rtspsrc_no_more_pads)
       break;
 
@@ -486,8 +516,6 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 
       goto out;
     }
-
-    if (factory->
   }
 
   /* create the payloaders based on the pads created by rtspsrc */

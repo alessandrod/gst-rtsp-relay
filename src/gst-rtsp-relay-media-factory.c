@@ -21,7 +21,7 @@
 
 #define DEFAULT_LOCATION NULL
 #define DEFAULT_FIND_DYNAMIC_STREAMS TRUE
-#define DYNAMIC_STREAMS_TIMEOUT (10 * GST_SECOND)
+#define DYNAMIC_STREAMS_TIMEOUT 5
 
 enum
 {
@@ -181,7 +181,7 @@ rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer data)
 {
   GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (data);
 
-  GST_INFO_OBJECT (factory, "blocked pad %s %"GST_PTR_FORMAT,
+  GST_DEBUG_OBJECT (factory, "blocked pad %s %"GST_PTR_FORMAT,
       GST_PAD_NAME (pad), GST_PAD_CAPS (pad)); 
 
   g_mutex_lock (factory->lock);
@@ -224,10 +224,10 @@ do_dynamic_link (GstRTSPRelayMediaFactory *factory, GstPad *pad)
     pad_caps = gst_pad_get_caps (pad);
     intersect = gst_caps_intersect (dynamic_payloader->caps, pad_caps);
 
-    GST_INFO_OBJECT (factory, "trying %s", gst_caps_to_string (intersect));
+    GST_DEBUG_OBJECT (factory, "trying %s", gst_caps_to_string (intersect));
 
     if (!gst_caps_is_empty (intersect)) {
-      GST_INFO_OBJECT (factory, "matches %s", gst_caps_to_string (intersect));
+      GST_DEBUG_OBJECT (factory, "matches %s", gst_caps_to_string (intersect));
 
       sink = gst_element_get_static_pad (dynamic_payloader->payloader, "sink");
       link_ret = gst_pad_link (pad, sink);
@@ -440,7 +440,8 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   GST_INFO_OBJECT (factory, "finding dynamic streams");
 
   g_get_current_time (&cond_timeout);
-  cond_timeout.tv_sec += DYNAMIC_STREAMS_TIMEOUT / GST_SECOND;
+  g_time_val_add (&cond_timeout,
+      DYNAMIC_STREAMS_TIMEOUT * G_USEC_PER_SEC);
 
   g_object_connect (G_OBJECT (rtspsrc),
       "signal::pad-added", G_CALLBACK (rtspsrc_pad_added_cb_block), factory,
@@ -461,8 +462,9 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
     if (factory->unblocked_pads == 0 && factory->rtspsrc_no_more_pads)
       break;
 
-    g_cond_timed_wait (factory->rtspsrc_no_more_pads_cond,
-        factory->lock, &cond_timeout);
+    if (!g_cond_timed_wait (factory->rtspsrc_no_more_pads_cond,
+        factory->lock, &cond_timeout))
+      break;
   }
 
   if (factory->rtspsrc_no_more_pads == FALSE) {

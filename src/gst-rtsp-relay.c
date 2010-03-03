@@ -50,6 +50,7 @@ main(int argc, char **argv)
   name = g_strdup_printf ("rtsp-relay-factory-%s", argv[1]);
   factory = gst_rtsp_relay_media_factory_new (argv[1]);
   gst_object_set_name (GST_OBJECT (factory), name);
+  g_object_set (factory, "timeout", 20 * GST_SECOND, NULL);
   g_free (name);
 
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);

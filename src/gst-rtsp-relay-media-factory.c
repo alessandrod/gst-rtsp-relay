@@ -21,13 +21,14 @@
 
 #define DEFAULT_LOCATION NULL
 #define DEFAULT_FIND_DYNAMIC_STREAMS TRUE
-#define DYNAMIC_STREAMS_TIMEOUT 5
+#define DEFAULT_TIMEOUT 10 * GST_SECOND
 
 enum
 {
   PROP_0,
   PROP_LOCATION,
-  PROP_FIND_DYNAMIC_STREAMS
+  PROP_FIND_DYNAMIC_STREAMS,
+  PROP_TIMEOUT
 };
 
 enum
@@ -99,6 +100,11 @@ gst_rtsp_relay_media_factory_class_init (GstRTSPRelayMediaFactoryClass * klass)
           "Find dynamic streams", "find dynamic streams",
           DEFAULT_FIND_DYNAMIC_STREAMS, G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
+  g_object_class_install_property (gobject_class, PROP_TIMEOUT,
+      g_param_spec_uint64 ("timeout",
+          "Timeout", "timeout",
+          0, G_MAXUINT64, DEFAULT_TIMEOUT, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+
   GST_DEBUG_CATEGORY_INIT (rtsp_relay_media_factory_debug,
       "rtsprelaymediafactory", 0, "RTSP Relay Media Factory");
 }
@@ -113,6 +119,7 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
   factory->rtspsrc_no_more_pads_cond = g_cond_new ();
   factory->unblocked_pads = 0;
   factory->dynamic_payloaders = NULL;
+  factory->timeout = DEFAULT_TIMEOUT;
 }
 
 static void
@@ -142,6 +149,9 @@ gst_rtsp_relay_media_factory_get_property (GObject *object, guint propid,
     case PROP_FIND_DYNAMIC_STREAMS:
       g_value_set_boolean (value, factory->find_dynamic_streams);
       break;
+    case PROP_TIMEOUT:
+      g_value_set_uint64 (value, factory->timeout);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, propid, pspec);
   }
@@ -160,6 +170,9 @@ gst_rtsp_relay_media_factory_set_property (GObject *object, guint propid,
       break;
     case PROP_FIND_DYNAMIC_STREAMS:
       factory->find_dynamic_streams = g_value_get_boolean (value);
+      break;
+    case PROP_TIMEOUT:
+      factory->timeout = g_value_get_uint64 (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, propid, pspec);
@@ -441,7 +454,7 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 
   g_get_current_time (&cond_timeout);
   g_time_val_add (&cond_timeout,
-      DYNAMIC_STREAMS_TIMEOUT * G_USEC_PER_SEC);
+      GST_TIME_AS_USECONDS (factory->timeout));
 
   g_object_connect (G_OBJECT (rtspsrc),
       "signal::pad-added", G_CALLBACK (rtspsrc_pad_added_cb_block), factory,
@@ -457,6 +470,8 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   gst_element_set_state (GST_ELEMENT (pipeline), GST_STATE_PLAYING);
 
   /* wait for no-more-pads from rtspsrc */
+  GST_DEBUG_OBJECT (factory, "timeout %"GST_TIME_FORMAT,
+      GST_TIME_ARGS (factory->timeout));
   g_mutex_lock (factory->lock);
   while (TRUE) {
     if (factory->unblocked_pads == 0 && factory->rtspsrc_no_more_pads)

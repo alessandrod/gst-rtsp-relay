@@ -47,9 +47,9 @@ struct _GstRTSPRelayMediaFactory {
   char *location;
   guint pay_pads;
   gboolean rtspsrc_no_more_pads;
-  GCond *rtspsrc_no_more_pads_cond;
+  GCond *dynamic_pads_cond;
   GList *dynamic_payloaders;
-  gint unblocked_pads;
+  gint pads_waiting_block;
 };
 
 struct _GstRTSPRelayMediaFactoryClass {

@@ -116,8 +116,8 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
   factory->location = NULL;
   factory->pay_pads = 0;
   factory->rtspsrc_no_more_pads = FALSE;
-  factory->rtspsrc_no_more_pads_cond = g_cond_new ();
-  factory->unblocked_pads = 0;
+  factory->dynamic_pads_cond = g_cond_new ();
+  factory->pads_waiting_block = 0;
   factory->dynamic_payloaders = NULL;
   factory->timeout = DEFAULT_TIMEOUT;
 }
@@ -129,7 +129,7 @@ gst_rtsp_relay_media_factory_finalize (GObject * obj)
 
   g_free (factory->location);
   g_mutex_free (factory->lock);
-  g_cond_free (factory->rtspsrc_no_more_pads_cond);
+  g_cond_free (factory->dynamic_pads_cond);
   g_list_foreach (factory->dynamic_payloaders, (GFunc) dynamic_payloader_free, NULL);
   g_list_free (factory->dynamic_payloaders);
 
@@ -198,8 +198,8 @@ rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer data)
       GST_PAD_NAME (pad), GST_PAD_CAPS (pad)); 
 
   g_mutex_lock (factory->lock);
-  factory->unblocked_pads -= 1;
-  g_cond_signal (factory->rtspsrc_no_more_pads_cond);
+  factory->pads_waiting_block -= 1;
+  g_cond_signal (factory->dynamic_pads_cond);
   g_mutex_unlock (factory->lock);
 }
 
@@ -211,7 +211,7 @@ rtspsrc_pad_added_cb_block (GstElement *rtspsrc, GstPad *pad,
       GST_DEBUG_PAD_NAME (pad));
 
   g_mutex_lock (factory->lock);
-  factory->unblocked_pads += 1;
+  factory->pads_waiting_block += 1;
   g_mutex_unlock (factory->lock);
 
   gst_pad_set_blocked_async (pad, TRUE, rtspsrc_pad_blocked_cb_block, factory);
@@ -438,7 +438,7 @@ rtspsrc_no_more_pads_cb (GstElement *element, gpointer data)
   GST_DEBUG_OBJECT (factory, "got no more pads");
   g_mutex_lock (factory->lock);
   factory->rtspsrc_no_more_pads = TRUE;
-  g_cond_signal (factory->rtspsrc_no_more_pads_cond);
+  g_cond_signal (factory->dynamic_pads_cond);
   g_mutex_unlock (factory->lock);
 }
 
@@ -466,27 +466,28 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   gst_object_ref (bin);
   gst_object_sink (bin);
   gst_bin_add (GST_BIN (pipeline), GST_ELEMENT (bin));
+
+  factory->pads_waiting_block = 0;
   factory->rtspsrc_no_more_pads = FALSE;
   gst_element_set_state (GST_ELEMENT (pipeline), GST_STATE_PLAYING);
 
-  /* wait for no-more-pads from rtspsrc */
+  /* wait for no-more-pads and until all pads are blocked */
   GST_DEBUG_OBJECT (factory, "timeout %"GST_TIME_FORMAT,
       GST_TIME_ARGS (factory->timeout));
   g_mutex_lock (factory->lock);
   while (TRUE) {
-    if (factory->unblocked_pads == 0 && factory->rtspsrc_no_more_pads)
+    if (factory->pads_waiting_block == 0 && factory->rtspsrc_no_more_pads)
       break;
 
-    if (!g_cond_timed_wait (factory->rtspsrc_no_more_pads_cond,
-        factory->lock, &cond_timeout))
-      break;
-  }
+    if (!g_cond_timed_wait (factory->dynamic_pads_cond,
+        factory->lock, &cond_timeout)) {
+      GST_ERROR_OBJECT (factory, "timeout finding dynamic streams");
+      g_mutex_unlock (factory->lock);
 
-  if (factory->rtspsrc_no_more_pads == FALSE) {
-    GST_ERROR_OBJECT (factory, "timeout waiting for no more pads");
-    g_mutex_unlock (factory->lock);
+      goto out;
+    }
 
-    goto out;
+    if (factory->
   }
 
   /* create the payloaders based on the pads created by rtspsrc */

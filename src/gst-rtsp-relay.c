@@ -33,11 +33,18 @@ main(int argc, char **argv)
   GstRTSPMediaMapping *mapping;
   GstRTSPRelayMediaFactory *factory;
   gchar *name;
+  GstRTSPUrl *local_url; 
 
   gst_init (&argc, &argv);
 
-  if (argc != 2) {
-    g_printerr ("Usage: %s RTSP_SERVER\n", argv[0]);
+  if (argc != 3) {
+    g_printerr ("Usage: %s [LOCAL_URL] [REMOTE_URL]\n", argv[0]);
+
+    return 1;
+  }
+
+  if (gst_rtsp_url_parse (argv[1], &local_url) != GST_RTSP_OK) {
+    g_printerr ("invalid local url");
 
     return 1;
   }
@@ -45,10 +52,10 @@ main(int argc, char **argv)
   loop = g_main_loop_new (NULL, FALSE);
 
   server = gst_rtsp_server_new ();
-  gst_rtsp_server_set_port (server, 8555);
+  gst_rtsp_server_set_port (server, local_url->port);
 
-  name = g_strdup_printf ("rtsp-relay-factory-%s", argv[1]);
-  factory = gst_rtsp_relay_media_factory_new (argv[1]);
+  name = g_strdup_printf ("rtsp-relay-factory-%s", argv[2]);
+  factory = gst_rtsp_relay_media_factory_new (argv[2]);
   gst_object_set_name (GST_OBJECT (factory), name);
   g_object_set (factory, "timeout", 20 * GST_SECOND, NULL);
   g_object_set (factory, "latency", 300 * GST_MSECOND, NULL);
@@ -56,9 +63,11 @@ main(int argc, char **argv)
 
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
   mapping = gst_rtsp_server_get_media_mapping (server);
-  gst_rtsp_media_mapping_add_factory (mapping, "/test",
+  gst_rtsp_media_mapping_add_factory (mapping, local_url->abspath,
       GST_RTSP_MEDIA_FACTORY (factory));
   g_object_unref (mapping);
+
+  gst_rtsp_url_free (local_url);
 
   gst_rtsp_server_attach (server, NULL);
 

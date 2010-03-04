@@ -22,13 +22,15 @@
 #define DEFAULT_LOCATION NULL
 #define DEFAULT_FIND_DYNAMIC_STREAMS TRUE
 #define DEFAULT_TIMEOUT 10 * GST_SECOND
+#define DEFAULT_LATENCY 2 * GST_SECOND
 
 enum
 {
   PROP_0,
   PROP_LOCATION,
   PROP_FIND_DYNAMIC_STREAMS,
-  PROP_TIMEOUT
+  PROP_TIMEOUT,
+  PROP_LATENCY,
 };
 
 enum
@@ -125,6 +127,11 @@ gst_rtsp_relay_media_factory_class_init (GstRTSPRelayMediaFactoryClass * klass)
           "Timeout", "timeout",
           0, G_MAXUINT64, DEFAULT_TIMEOUT, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 
+  g_object_class_install_property (gobject_class, PROP_LATENCY,
+      g_param_spec_uint64 ("latency",
+          "Latency", "latency",
+          0, G_MAXUINT64, DEFAULT_LATENCY, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+
   GST_DEBUG_CATEGORY_INIT (rtsp_relay_media_factory_debug,
       "rtsprelaymediafactory", 0, "RTSP Relay Media Factory");
 }
@@ -139,6 +146,7 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
   factory->pads_waiting_block = 0;
   factory->dynamic_payloaders = NULL;
   factory->timeout = DEFAULT_TIMEOUT;
+  factory->latency = DEFAULT_LATENCY;
   factory->error = FALSE;
 }
 
@@ -172,6 +180,9 @@ gst_rtsp_relay_media_factory_get_property (GObject *object, guint propid,
     case PROP_TIMEOUT:
       g_value_set_uint64 (value, factory->timeout);
       break;
+    case PROP_LATENCY:
+      g_value_set_uint64 (value, factory->latency);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, propid, pspec);
   }
@@ -193,6 +204,9 @@ gst_rtsp_relay_media_factory_set_property (GObject *object, guint propid,
       break;
     case PROP_TIMEOUT:
       factory->timeout = g_value_get_uint64 (value);
+      break;
+    case PROP_LATENCY:
+      factory->latency = g_value_get_uint64 (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, propid, pspec);
@@ -595,6 +609,10 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
 
   bin = GST_BIN (gst_bin_new (NULL));
   rtspsrc = gst_element_factory_make ("rtspsrc", NULL);
+  GST_INFO_OBJECT (factory, "setting latency %"GST_TIME_FORMAT,
+      GST_TIME_ARGS (factory->latency));
+  g_object_set (rtspsrc, "latency",
+      GST_TIME_AS_MSECONDS (factory->latency), NULL);
   g_object_set (G_OBJECT (rtspsrc), "location", factory->location, NULL);
 
   gst_bin_add (bin, GST_ELEMENT (rtspsrc));

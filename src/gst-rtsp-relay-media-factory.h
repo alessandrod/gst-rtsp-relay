@@ -45,7 +45,6 @@ struct _GstRTSPRelayMediaFactory {
   gboolean find_dynamic_streams;
   GstClockTime timeout;
   char *location;
-  guint pay_pads;
   gboolean rtspsrc_no_more_pads;
   GCond *dynamic_pads_cond;
   GList *dynamic_payloaders;

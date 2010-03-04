@@ -114,7 +114,6 @@ gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
 {
   factory->lock = g_mutex_new ();
   factory->location = NULL;
-  factory->pay_pads = 0;
   factory->rtspsrc_no_more_pads = FALSE;
   factory->dynamic_pads_cond = g_cond_new ();
   factory->pads_waiting_block = 0;

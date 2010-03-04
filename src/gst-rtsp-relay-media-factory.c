@@ -502,6 +502,7 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   g_mutex_lock (factory->lock);
   while (TRUE) {
     if (factory->error) {
+      factory->error = FALSE;
       g_mutex_unlock (factory->lock);
 
       goto out;

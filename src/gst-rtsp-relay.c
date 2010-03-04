@@ -51,6 +51,7 @@ main(int argc, char **argv)
   factory = gst_rtsp_relay_media_factory_new (argv[1]);
   gst_object_set_name (GST_OBJECT (factory), name);
   g_object_set (factory, "timeout", 20 * GST_SECOND, NULL);
+  g_object_set (factory, "latency", 300 * GST_MSECOND, NULL);
   g_free (name);
 
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
@@ -61,7 +62,7 @@ main(int argc, char **argv)
 
   gst_rtsp_server_attach (server, NULL);
 
-  g_timeout_add_seconds (2, (GSourceFunc) timeout, server); 
+  g_timeout_add_seconds (10, (GSourceFunc) timeout, server); 
   /* start serving */
   g_main_loop_run (loop);
 

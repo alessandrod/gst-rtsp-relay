@@ -43,6 +43,7 @@ struct _GstRTSPRelayMediaFactory {
 
   GMutex *lock;
   gboolean find_dynamic_streams;
+  GstClockTime latency;
   GstClockTime timeout;
   char *location;
   gboolean rtspsrc_no_more_pads;

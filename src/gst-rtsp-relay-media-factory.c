@@ -57,6 +57,26 @@ static void rtspsrc_pad_blocked_cb_link_dynamic (GstPad *pad, gboolean blocked,
 
 G_DEFINE_TYPE (GstRTSPRelayMediaFactory, gst_rtsp_relay_media_factory, GST_TYPE_RTSP_MEDIA_FACTORY);
 
+GstStaticCaps rtp_h264_video_caps =
+    GST_STATIC_CAPS ("application/x-rtp, "
+        "encoding-name=(string)H264, media=(string)video");
+
+GstStaticCaps rtp_mpeg4_generic_audio_caps =
+    GST_STATIC_CAPS ("application/x-rtp, "
+        "encoding-name=(string)MPEG4-GENERIC, media=(string)audio");
+
+typedef struct
+{
+  GstStaticCaps *caps;
+  const gchar *description;
+} PayloaderBin;
+
+static PayloaderBin payloader_bins[] = {
+  { &rtp_h264_video_caps, "rtph264depay ! rtph264pay" },
+  { &rtp_mpeg4_generic_audio_caps, "rtpmp4gdepay ! rtpmp4gpay" },
+  { NULL, NULL }
+};
+
 static DynamicPayloader *
 dynamic_payloader_new (GstElement *payloader, GstCaps *caps)
 {
@@ -308,13 +328,32 @@ rtspsrc_pad_added_cb_link_dynamic (GstElement *rtspsrc, GstPad *pad,
 
 static GstElement *
 create_payloader_from_pad (GstRTSPRelayMediaFactory *factory,
-    GstPad *pad, guint payn)
+    GstPad *pad, GstCaps *caps, guint payn)
 {
   GstElement *payloader;
   char buf[10];
   GstPad *srcpad = NULL;
+  int i;
+  const gchar *description = NULL;
+  GstCaps *payloader_caps, *intersect;
 
-  payloader = gst_parse_bin_from_description ("identity", TRUE, NULL);
+  for (i = 0; payloader_bins[i].description != NULL; i++) {
+    payloader_caps = gst_static_caps_get (payloader_bins[i].caps);
+    intersect = gst_caps_intersect (caps, payloader_caps);
+    if (!gst_caps_is_empty (intersect)) {
+      description = payloader_bins[i].description;
+      GST_INFO_OBJECT (factory, "using description %s", description);
+      break;
+    }
+
+    gst_caps_unref (intersect);
+    gst_caps_unref (payloader_caps);
+  }
+
+  if (description == NULL)
+    description = "identity";
+
+  payloader = gst_parse_bin_from_description (description, TRUE, NULL);
 
   g_snprintf (buf, 10, "pay%d", payn);
   gst_element_set_name (payloader, (const char *) &buf);
@@ -396,8 +435,8 @@ restart:
       case GST_ITERATOR_OK:
         pad = GST_PAD (elem);
         if (g_strstr_len (GST_PAD_NAME (pad), -1, "recv_rtp_src")) {
-          payloader = create_payloader_from_pad (factory, pad, payn++);
           caps = get_payloader_caps (GST_PAD_CAPS (pad));
+          payloader = create_payloader_from_pad (factory, pad, caps, payn++);
           dynamic_payloader = dynamic_payloader_new (payloader, caps);
           factory->dynamic_payloaders =
               g_list_append (factory->dynamic_payloaders, dynamic_payloader);

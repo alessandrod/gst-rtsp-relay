@@ -59,11 +59,11 @@ static void rtspsrc_pad_blocked_cb_link_dynamic (GstPad *pad, gboolean blocked,
 
 G_DEFINE_TYPE (GstRTSPRelayMediaFactory, gst_rtsp_relay_media_factory, GST_TYPE_RTSP_MEDIA_FACTORY);
 
-GstStaticCaps rtp_h264_video_caps =
+static GstStaticCaps rtp_h264_video_caps =
     GST_STATIC_CAPS ("application/x-rtp, "
         "encoding-name=(string)H264, media=(string)video");
 
-GstStaticCaps rtp_mpeg4_generic_audio_caps =
+static GstStaticCaps rtp_mpeg4_generic_audio_caps =
     GST_STATIC_CAPS ("application/x-rtp, "
         "encoding-name=(string)MPEG4-GENERIC, media=(string)audio");
 

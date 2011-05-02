@@ -115,7 +115,7 @@ gst_rtsp_relay_media_factory_class_init (GstRTSPRelayMediaFactoryClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_LOCATION,
       g_param_spec_string ("location", "Location", "Location",
-          DEFAULT_LOCATION, G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+          DEFAULT_LOCATION, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 
   g_object_class_install_property (gobject_class, PROP_FIND_DYNAMIC_STREAMS,
       g_param_spec_boolean ("find-dynamic-streams",

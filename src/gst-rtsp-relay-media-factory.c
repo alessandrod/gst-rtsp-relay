@@ -575,10 +575,10 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   num_streams = create_payloaders_from_element_pads (factory, rtspsrc, bin);
   g_mutex_unlock (factory->lock);
 
+out:
   /* shut down the pipeline */
   gst_element_set_state (GST_ELEMENT (pipeline), GST_STATE_NULL);
 
-out:
   g_object_disconnect (G_OBJECT (rtspsrc),
       "any_signal::pad-added", G_CALLBACK (rtspsrc_pad_added_cb_block), factory,
       "any_signal::no-more-pads", G_CALLBACK (rtspsrc_no_more_pads_cb), factory,

@@ -54,6 +54,8 @@ static void gst_rtsp_relay_media_factory_set_property (GObject *object, guint pr
 static void gst_rtsp_relay_media_factory_finalize (GObject * obj);
 static GstElement * gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *factory,
     const GstRTSPUrl *url);
+static void gst_rtsp_relay_media_factory_configure (GstRTSPMediaFactory * factory,
+    GstRTSPMedia * media);
 static void rtspsrc_pad_blocked_cb_link_dynamic (GstPad *pad, gboolean blocked,
     gpointer user_data);
 
@@ -112,6 +114,7 @@ gst_rtsp_relay_media_factory_class_init (GstRTSPRelayMediaFactoryClass * klass)
   gobject_class->finalize = gst_rtsp_relay_media_factory_finalize;
 
   media_factory_class->get_element = gst_rtsp_relay_media_factory_get_element;
+  media_factory_class->configure = gst_rtsp_relay_media_factory_configure;
 
   g_object_class_install_property (gobject_class, PROP_LOCATION,
       g_param_spec_string ("location", "Location", "Location",
@@ -635,3 +638,9 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
   return GST_ELEMENT (bin);
 }
 
+static void
+gst_rtsp_relay_media_factory_configure (GstRTSPMediaFactory * factory, GstRTSPMedia * media)
+{
+  GST_RTSP_MEDIA_FACTORY_CLASS (gst_rtsp_relay_media_factory_parent_class)->configure (factory, media);
+  gst_rtsp_media_set_reusable (media, FALSE);
+}

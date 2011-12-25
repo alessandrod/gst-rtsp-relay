@@ -638,9 +638,49 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
   return GST_ELEMENT (bin);
 }
 
+static gboolean
+unprepare (gpointer user_data)
+{
+  GstRTSPMedia *media = GST_RTSP_MEDIA (user_data);
+
+  gst_element_set_state (media->pipeline, GST_STATE_NULL);
+  gst_rtsp_media_unprepare (media);
+
+  return FALSE;
+}
+
+static void
+media_bus_warning_cb (GstBus *bus, GstMessage *message, gpointer user_data)
+{
+  GstRTSPMedia *media = GST_RTSP_MEDIA (user_data);
+  switch (GST_MESSAGE_TYPE (message)) {
+    case GST_MESSAGE_WARNING:
+    {
+      GError *error = NULL;
+      gchar *debug;
+      gst_message_parse_warning (message, &error, &debug);
+      if (error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_READ)
+        g_idle_add (unprepare, media);
+      break;
+    }
+    case GST_MESSAGE_ERROR:
+        g_idle_add (unprepare, media);
+    default:
+      break;
+  }
+}
+
 static void
 gst_rtsp_relay_media_factory_configure (GstRTSPMediaFactory * factory, GstRTSPMedia * media)
 {
+  GstBus *bus;
+
   GST_RTSP_MEDIA_FACTORY_CLASS (gst_rtsp_relay_media_factory_parent_class)->configure (factory, media);
   gst_rtsp_media_set_reusable (media, FALSE);
+
+  bus = gst_pipeline_get_bus (GST_PIPELINE (media->pipeline));
+  gst_bus_set_sync_handler (bus, gst_bus_sync_signal_handler, factory);
+  g_object_connect (bus, "signal::sync-message::warning",
+      G_CALLBACK (media_bus_warning_cb), media, NULL);
+  gst_object_unref (bus);
 }

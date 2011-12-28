@@ -638,33 +638,43 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
   return GST_ELEMENT (bin);
 }
 
-static gboolean
-unprepare (gpointer user_data)
+static gpointer
+unprepare_thread (gpointer user_data)
 {
   GstRTSPMedia *media = GST_RTSP_MEDIA (user_data);
+  GstRTSPMediaFactory *factory = GST_RTSP_MEDIA_FACTORY (g_object_get_data (G_OBJECT (media), "relay::factory"));
 
+  GST_WARNING_OBJECT (factory, "unpreparing media %p", media);
   gst_element_set_state (media->pipeline, GST_STATE_NULL);
+  g_mutex_unlock (factory->medias_lock);
   gst_rtsp_media_unprepare (media);
 
-  return FALSE;
+  return NULL;
 }
 
 static void
 media_bus_warning_cb (GstBus *bus, GstMessage *message, gpointer user_data)
 {
   GstRTSPMedia *media = GST_RTSP_MEDIA (user_data);
+  GstRTSPMediaFactory *factory = GST_RTSP_MEDIA_FACTORY (g_object_get_data (G_OBJECT (media), "relay::factory"));
   switch (GST_MESSAGE_TYPE (message)) {
     case GST_MESSAGE_WARNING:
     {
       GError *error = NULL;
       gchar *debug;
       gst_message_parse_warning (message, &error, &debug);
-      if (error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_READ)
-        g_idle_add (unprepare, media);
+      GST_WARNING_OBJECT (factory, "media %p warning: %s debug: %s",
+          media, error->message, debug);
+      if (error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_READ) {
+        g_mutex_lock (factory->medias_lock);
+        g_thread_create (unprepare_thread, media, FALSE, NULL);
+      }
       break;
     }
     case GST_MESSAGE_ERROR:
-        g_idle_add (unprepare, media);
+        g_mutex_lock (factory->medias_lock);
+        g_thread_create (unprepare_thread, media, FALSE, NULL);
+        break;
     default:
       break;
   }
@@ -683,4 +693,6 @@ gst_rtsp_relay_media_factory_configure (GstRTSPMediaFactory * factory, GstRTSPMe
   g_object_connect (bus, "signal::sync-message::warning",
       G_CALLBACK (media_bus_warning_cb), media, NULL);
   gst_object_unref (bus);
+
+  g_object_set_data (G_OBJECT (media), "relay::factory", factory);
 }

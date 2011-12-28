@@ -76,8 +76,8 @@ typedef struct
 } PayloaderBin;
 
 static PayloaderBin payloader_bins[] = {
-  { &rtp_h264_video_caps, "rtph264depay ! rtph264pay" },
-  { &rtp_mpeg4_generic_audio_caps, "rtpmp4gdepay ! rtpmp4gpay" },
+  { &rtp_h264_video_caps, "rtph264depay ! rtph264pay pt=96" },
+  { &rtp_mpeg4_generic_audio_caps, "rtpmp4gdepay ! rtpmp4gpay pt=97" },
   { NULL, NULL }
 };
 

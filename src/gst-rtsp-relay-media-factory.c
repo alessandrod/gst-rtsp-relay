@@ -552,8 +552,8 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   gst_element_set_state (GST_ELEMENT (pipeline), GST_STATE_PLAYING);
 
   /* wait for no-more-pads and until all pads are blocked */
-  GST_DEBUG_OBJECT (factory, "timeout %"GST_TIME_FORMAT,
-      GST_TIME_ARGS (factory->timeout));
+  GST_DEBUG_OBJECT (factory, "uri %s timeout %"GST_TIME_FORMAT,
+      factory->location, GST_TIME_ARGS (factory->timeout));
   g_mutex_lock (factory->lock);
   while (TRUE) {
     if (factory->error) {
@@ -615,7 +615,7 @@ gst_rtsp_relay_media_factory_get_element (GstRTSPMediaFactory *media_factory,
   GST_INFO_OBJECT (factory, "setting latency %"GST_TIME_FORMAT,
       GST_TIME_ARGS (factory->latency));
   g_object_set (rtspsrc, "latency",
-      GST_TIME_AS_MSECONDS (factory->latency), NULL);
+      GST_TIME_AS_MSECONDS (factory->latency), "tcp-timeout", 3000000, NULL);
   g_object_set (G_OBJECT (rtspsrc), "location", factory->location, NULL);
 
   gst_bin_add (bin, GST_ELEMENT (rtspsrc));

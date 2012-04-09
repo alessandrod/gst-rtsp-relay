@@ -69,6 +69,10 @@ static GstStaticCaps rtp_mpeg4_generic_audio_caps =
     GST_STATIC_CAPS ("application/x-rtp, "
         "encoding-name=(string)MPEG4-GENERIC, media=(string)audio");
 
+static GstStaticCaps rtp_mp3_audio_caps =
+    GST_STATIC_CAPS ("application/x-rtp, "
+        "encoding-name=(string)MPA, media=(string)audio");
+
 typedef struct
 {
   GstStaticCaps *caps;
@@ -78,6 +82,7 @@ typedef struct
 static PayloaderBin payloader_bins[] = {
   { &rtp_h264_video_caps, "rtph264depay ! rtph264pay pt=96" },
   { &rtp_mpeg4_generic_audio_caps, "rtpmp4gdepay ! rtpmp4gpay pt=97" },
+  { &rtp_mp3_audio_caps, "rtpmpadepay ! mpegaudioparse ! rtpmpapay pt=97" },
   { NULL, NULL }
 };
 

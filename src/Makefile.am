@@ -5,7 +5,7 @@ libgstrtsprelay_la_SOURCES = \
 	gst-rtsp-relay-media-factory.c
 
 libgstrtsprelay_la_CFLAGS = $(GST_CFLAGS) $(GST_RTSP_SERVER_CFLAGS) -fPIC -Wall -Werror
-libgstrtsprelay_la_LIBADD = $(GST_LIBS) $(GST_RTSP_SERVER_LIBS) -lgstinterfaces-0.10
+libgstrtsprelay_la_LIBADD = $(GST_LIBS) $(GST_RTSP_SERVER_LIBS) -lgstinterfaces-0.10 -lgstrtsp-0.10
 libgstrtsprelay_la_LDFLAGS = -avoid-version -no-undefined -static
 
 gst_rtsp_relay_SOURCES = \

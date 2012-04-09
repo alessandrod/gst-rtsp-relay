@@ -293,6 +293,7 @@ do_dynamic_link (GstRTSPRelayMediaFactory *factory, GstPad *pad)
         walk = walk->next;
         factory->dynamic_payloaders =
             g_list_delete_link (factory->dynamic_payloaders, del);
+        dynamic_payloader_free (dynamic_payloader);
       } else {
         GST_ERROR_OBJECT (factory, "couldn't link pads");
         walk = walk->next;
@@ -358,18 +359,20 @@ create_payloader_from_pad (GstRTSPRelayMediaFactory *factory,
   int i;
   const gchar *description = NULL;
   GstCaps *payloader_caps, *intersect;
+  gboolean empty;
 
   for (i = 0; payloader_bins[i].description != NULL; i++) {
     payloader_caps = gst_static_caps_get (payloader_bins[i].caps);
     intersect = gst_caps_intersect (caps, payloader_caps);
-    if (!gst_caps_is_empty (intersect)) {
+    empty = gst_caps_is_empty (intersect);
+    gst_caps_unref (intersect);
+    gst_caps_unref (payloader_caps);
+
+    if (!empty) {
       description = payloader_bins[i].description;
       GST_INFO_OBJECT (factory, "using description %s", description);
       break;
     }
-
-    gst_caps_unref (intersect);
-    gst_caps_unref (payloader_caps);
   }
 
   if (description == NULL)
@@ -412,7 +415,7 @@ static int
 create_payloaders_from_element_pads (GstRTSPRelayMediaFactory *factory,
     GstElement *rtspsrc, GstBin *bin)
 {
-  gboolean done, error;
+  gboolean done;
   GstIterator *iterator;
   GstIteratorResult itres;
   gpointer elem;
@@ -435,7 +438,6 @@ restart:
   factory->dynamic_payloaders = NULL;
   payn = 0;
 
-  error = FALSE;
   done = FALSE;
   while (!done) {
     itres = gst_iterator_next (iterator, &elem);
@@ -448,7 +450,6 @@ restart:
       case GST_ITERATOR_ERROR:
         GST_ERROR_OBJECT (factory, "error iterating srcpads");
         done = TRUE;
-        error = TRUE;
         break;
 
       case GST_ITERATOR_RESYNC:
@@ -487,7 +488,7 @@ restart:
     gst_bin_add (bin, payloader);
     num_streams += 1;
   }
-  
+
   return num_streams;
 }
 

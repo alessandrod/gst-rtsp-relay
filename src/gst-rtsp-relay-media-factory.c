@@ -281,7 +281,7 @@ do_dynamic_link (GstRTSPRelayMediaFactory *factory, GstPad *pad)
 
       sink = gst_element_get_static_pad (dynamic_payloader->payloader, "sink");
       link_ret = gst_pad_link (pad, sink);
-      if (link_ret == GST_FLOW_OK) {
+      if (link_ret == GST_PAD_LINK_OK) {
         found = TRUE;
 
         del = walk;

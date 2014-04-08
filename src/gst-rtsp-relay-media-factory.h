@@ -41,13 +41,13 @@ typedef struct _GstRTSPRelayMediaFactoryClass GstRTSPRelayMediaFactoryClass;
 struct _GstRTSPRelayMediaFactory {
   GstRTSPMediaFactory factory;
 
-  GMutex *lock;
+  GMutex lock;
   gboolean find_dynamic_streams;
   GstClockTime latency;
   GstClockTime timeout;
   char *location;
   gboolean rtspsrc_no_more_pads;
-  GCond *dynamic_pads_cond;
+  GCond dynamic_pads_cond;
   GList *dynamic_payloaders;
   gint pads_waiting_block;
   gboolean error;

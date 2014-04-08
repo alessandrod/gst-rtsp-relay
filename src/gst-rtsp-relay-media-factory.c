@@ -147,10 +147,10 @@ gst_rtsp_relay_media_factory_class_init (GstRTSPRelayMediaFactoryClass * klass)
 static void
 gst_rtsp_relay_media_factory_init (GstRTSPRelayMediaFactory * factory)
 {
-  factory->lock = g_mutex_new ();
+  g_mutex_init(&factory->lock);
   factory->location = NULL;
   factory->rtspsrc_no_more_pads = FALSE;
-  factory->dynamic_pads_cond = g_cond_new ();
+  g_cond_init(&factory->dynamic_pads_cond);
   factory->pads_waiting_block = 0;
   factory->dynamic_payloaders = NULL;
   factory->timeout = DEFAULT_TIMEOUT;
@@ -164,8 +164,8 @@ gst_rtsp_relay_media_factory_finalize (GObject * obj)
   GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (obj);
 
   g_free (factory->location);
-  g_mutex_free (factory->lock);
-  g_cond_free (factory->dynamic_pads_cond);
+  g_mutex_clear (&factory->lock);
+  g_cond_clear (&factory->dynamic_pads_cond);
   g_list_foreach (factory->dynamic_payloaders, (GFunc) dynamic_payloader_free, NULL);
   g_list_free (factory->dynamic_payloaders);
 
@@ -239,10 +239,10 @@ rtspsrc_pad_blocked_cb_block (GstPad *pad, gboolean blocked, gpointer data)
   GST_DEBUG_OBJECT (factory, "blocked pad %s %"GST_PTR_FORMAT,
       GST_PAD_NAME (pad), GST_PAD_CAPS (pad)); 
 
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   factory->pads_waiting_block -= 1;
-  g_cond_signal (factory->dynamic_pads_cond);
-  g_mutex_unlock (factory->lock);
+  g_cond_signal (&factory->dynamic_pads_cond);
+  g_mutex_unlock (&factory->lock);
 }
 
 static void
@@ -252,9 +252,9 @@ rtspsrc_pad_added_cb_block (GstElement *rtspsrc, GstPad *pad,
   GST_DEBUG_OBJECT (factory, "found new pad %s:%s, blocking",
       GST_DEBUG_PAD_NAME (pad));
 
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   factory->pads_waiting_block += 1;
-  g_mutex_unlock (factory->lock);
+  g_mutex_unlock (&factory->lock);
 
   gst_pad_set_blocked_async (pad, TRUE, rtspsrc_pad_blocked_cb_block, factory);
 }
@@ -327,9 +327,9 @@ rtspsrc_pad_blocked_cb_link_dynamic (GstPad *pad, gboolean blocked, gpointer use
     return;
   }
 
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   do_dynamic_link (factory, pad);
-  g_mutex_unlock (factory->lock);
+  g_mutex_unlock (&factory->lock);
 }
 
 static void
@@ -498,10 +498,10 @@ rtspsrc_no_more_pads_cb (GstElement *element, gpointer data)
   GstRTSPRelayMediaFactory *factory = GST_RTSP_RELAY_MEDIA_FACTORY (data);
 
   GST_DEBUG_OBJECT (factory, "got no more pads");
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   factory->rtspsrc_no_more_pads = TRUE;
-  g_cond_signal (factory->dynamic_pads_cond);
-  g_mutex_unlock (factory->lock);
+  g_cond_signal (&factory->dynamic_pads_cond);
+  g_mutex_unlock (&factory->lock);
 }
 
 static void
@@ -515,10 +515,10 @@ bus_message_error_cb (GstBus *bus, GstMessage *message, gpointer user_data)
   GST_ERROR_OBJECT (factory, "got error %s: %s", error->message, debug);
   g_error_free (error);
 
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   factory->error = TRUE;
-  g_cond_signal (factory->dynamic_pads_cond);
-  g_mutex_unlock (factory->lock);
+  g_cond_signal (&factory->dynamic_pads_cond);
+  g_mutex_unlock (&factory->lock);
 }
 
 static guint
@@ -527,14 +527,13 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 {
   GstPipeline *pipeline;
   GstBus *bus;
-  GTimeVal cond_timeout;
+  gint64 cond_timeout;
   gint num_streams = 0;
 
   GST_INFO_OBJECT (factory, "finding dynamic streams");
 
-  g_get_current_time (&cond_timeout);
-  g_time_val_add (&cond_timeout,
-      GST_TIME_AS_USECONDS (factory->timeout));
+  cond_timeout = g_get_real_time ();
+  cond_timeout += GST_TIME_AS_USECONDS (factory->timeout);
 
   g_object_connect (G_OBJECT (rtspsrc),
       "signal::pad-added", G_CALLBACK (rtspsrc_pad_added_cb_block), factory,
@@ -560,21 +559,21 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
   /* wait for no-more-pads and until all pads are blocked */
   GST_DEBUG_OBJECT (factory, "uri %s timeout %"GST_TIME_FORMAT,
       factory->location, GST_TIME_ARGS (factory->timeout));
-  g_mutex_lock (factory->lock);
+  g_mutex_lock (&factory->lock);
   while (TRUE) {
     if (factory->error) {
       factory->error = FALSE;
-      g_mutex_unlock (factory->lock);
+      g_mutex_unlock (&factory->lock);
 
       goto out;
     }
     if (factory->pads_waiting_block == 0 && factory->rtspsrc_no_more_pads)
       break;
 
-    if (!g_cond_timed_wait (factory->dynamic_pads_cond,
-        factory->lock, &cond_timeout)) {
+    if (!g_cond_wait_until (&factory->dynamic_pads_cond,
+        &factory->lock, cond_timeout)) {
       GST_ERROR_OBJECT (factory, "timeout finding dynamic streams");
-      g_mutex_unlock (factory->lock);
+      g_mutex_unlock (&factory->lock);
 
       goto out;
     }
@@ -582,7 +581,7 @@ do_find_dynamic_streams (GstRTSPRelayMediaFactory *factory, GstBin *bin,
 
   /* create the payloaders based on the pads created by rtspsrc */
   num_streams = create_payloaders_from_element_pads (factory, rtspsrc, bin);
-  g_mutex_unlock (factory->lock);
+  g_mutex_unlock (&factory->lock);
 
 out:
   /* shut down the pipeline */
@@ -673,13 +672,13 @@ media_bus_warning_cb (GstBus *bus, GstMessage *message, gpointer user_data)
           media, error->message, debug);
       if (error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_READ) {
         g_mutex_lock (factory->medias_lock);
-        g_thread_create (unprepare_thread, media, FALSE, NULL);
+        g_thread_new ("gst-thread", unprepare_thread, media);
       }
       break;
     }
     case GST_MESSAGE_ERROR:
         g_mutex_lock (factory->medias_lock);
-        g_thread_create (unprepare_thread, media, FALSE, NULL);
+        g_thread_new ("gst-thread", unprepare_thread, media);
         break;
     default:
       break;
